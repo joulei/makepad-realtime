@@ -204,9 +204,30 @@ live_design! {
                         draw_text: {text_style: {font_size: 24}}
                     }
 
-                    connection_status = <Label> {
-                        text: "Disconnected"
-                        draw_text: {text_style: {font_size: 16}}
+                    <View> {
+                        height: Fit
+                        align: {x: 0.5, y: 0.5}
+                        spacing: 20
+    
+                        button_connect = <Button> {
+                            text: "🔗 Connect to OpenAI"
+                            draw_text: {text_style: {font_size: 18}}
+                        }
+
+                        connection_status = <Label> {
+                            text: "Disconnected"
+                            draw_text: {text_style: {font_size: 16}}
+                        }
+                    }
+
+                    button_start_conversation = <Button> {
+                        text: "🎤 Start Conversation"
+                        draw_text: {text_style: {font_size: 18}}
+                    }
+
+                    button_stop_conversation = <Button> {
+                        text: "⏹️ Stop Conversation"
+                        draw_text: {text_style: {font_size: 18}}
                     }
 
                     toggle_interruptions = <Toggle> {
@@ -218,21 +239,6 @@ live_design! {
                         draw_bg: {
                             size: 25.
                         }
-                    }
-
-                    button_connect = <Button> {
-                        text: "🔗 Connect to OpenAI"
-                        draw_text: {text_style: {font_size: 18}}
-                    }
-
-                    button_start_conversation = <Button> {
-                        text: "🎤 Start Conversation"
-                        draw_text: {text_style: {font_size: 18}}
-                    }
-
-                    button_stop_conversation = <Button> {
-                        text: "⏹️ Stop Conversation"
-                        draw_text: {text_style: {font_size: 18}}
                     }
 
                     transcript_label = <Label> {
@@ -712,7 +718,7 @@ impl App {
                         log!("Speech detected by OpenAI - interrupting AI audio");
                         self.ui
                             .label(id!(status_label))
-                            .set_text(cx, "🎤 Speech detected - interrupting AI");
+                            .set_text(cx, "🎤 User speech detected");
 
                         // CRITICAL: Clear the playback audio buffer to stop ongoing AI audio
                         // This prevents audio accumulation and feedback loops
