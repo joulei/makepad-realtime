@@ -36,8 +36,6 @@ A basic integration with OpenAI's Realtime API for conversational audio, built w
 
 ## Limitations
 
-- Interruptions are not fully handled correctly yet, in this implementation OpenAI seems to only interrupt
-after a certain point in generation, or after generation, rather than at any time. (E.g. when AI is generating a long response, you can't interrupt it very early). To be fixed soon.
 - Makpead is not able to use my airpods as audio input correctly (reads empty audio), but it outputs audio to them fine.
 - Only tested in macOS, other platforms in Makepad have some limitations in their websocket support.
 

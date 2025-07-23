@@ -586,9 +586,9 @@ impl App {
             }),
             turn_detection: Some(TurnDetectionConfig {
                 detection_type: "server_vad".to_string(), // Server-side VAD. Turns are detected by the server.
-                threshold: 0.8,
+                threshold: 0.5,
                 prefix_padding_ms: 300,
-                silence_duration_ms: 500,
+                silence_duration_ms: 200,
                 interrupt_response: true,
                 create_response: true,
             }),
@@ -646,6 +646,10 @@ impl App {
                                 // Interruptions disabled - mute microphone during AI speech
                                 *self.is_recording.lock().unwrap() = false;
                                 println!("Setting is_recording to false (interruptions disabled)");
+                            } else {
+                                // Interruptions enabled - ensure recording is active for real-time interruption
+                                *self.is_recording.lock().unwrap() = true;
+                                println!("Keeping is_recording true (interruptions enabled)");
                             }
                         }
 
