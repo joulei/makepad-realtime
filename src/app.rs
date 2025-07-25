@@ -46,11 +46,18 @@ pub struct SessionConfig {
     pub input_audio_format: String,
     pub output_audio_format: String,
     pub input_audio_transcription: Option<TranscriptionConfig>,
+    pub input_audio_noise_reduction: Option<NoiseReductionConfig>,
     pub turn_detection: Option<TurnDetectionConfig>,
     pub tools: Vec<serde_json::Value>,
     pub tool_choice: String,
     pub temperature: f32,
     pub max_response_output_tokens: Option<u32>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct NoiseReductionConfig {
+    #[serde(rename = "type")]
+    pub noise_reduction_type: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -86,28 +93,16 @@ pub struct ConversationItem {
     pub id: Option<String>,
     #[serde(rename = "type")]
     pub item_type: String,
-    pub status: Option<String>,
     pub role: String,
     pub content: Vec<ContentPart>,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(tag = "type")]
-pub enum ContentPart {
-    #[serde(rename = "input_text")]
-    InputText { text: String },
-    #[serde(rename = "input_audio")]
-    InputAudio {
-        audio: String,
-        transcript: Option<String>,
-    },
-    #[serde(rename = "text")]
-    Text { text: String },
-    #[serde(rename = "audio")]
-    Audio {
-        audio: String,
-        transcript: Option<String>,
-    },
+pub struct ContentPart {
+    #[serde(rename = "type")]
+    pub part_type: String,
+    pub text: Option<String>,
 }
 
 // Incoming message types from OpenAI
@@ -182,15 +177,67 @@ live_design! {
     use link::shaders::*;
     use link::widgets::*;
 
+    TranscriptionModelSelector = <View> {
+        height: Fit
+        align: {x: 0.5, y: 0.5}
+
+        <Label> {
+            text: "Select transcription model"
+            draw_text: {text_style: {font_size: 15}}
+        }
+
+        transcription_model_selector = <DropDown> {
+            margin: 5
+            labels: ["whisper-1", "some-other-model"]
+            values: [whisper_1, some_other_model]
+
+            draw_text: {
+                text_style: {font_size: 15}
+            }
+
+            popup_menu = {
+                draw_text: {
+                    text_style: {font_size: 15}
+                }
+            }
+        }
+    }
+
+    VoiceSelector = <View> {
+        height: Fit
+        align: {x: 0.5, y: 0.5}
+
+        <Label> {
+            text: "Select voice (OpenAI only, can't change once conversation starts)"
+            draw_text: {text_style: {font_size: 15}}
+        }
+
+        voice_selector = <DropDown> {
+            margin: 5
+            labels: ["alloy", "shimmer", "ash", "ballad", "coral", "echo", "sage", "verse"]
+            values: [alloy, shimmer, ash, ballad, coral, echo, sage, verse]
+
+            draw_text: {
+                text_style: {font_size: 15}
+            }
+
+            popup_menu = {
+                draw_text: {
+                    text_style: {font_size: 15}
+                }
+            }
+        }
+    }
+
     App = {{App}} {
         ui: <Root>{
             main_window = <Window>{
                 body = <View>{
-                    flow: Down,
-                    spacing: 30,
+                    flow: Down, spacing: 20
+                    padding: {top: 20}
                     align: {
                         x: 0.5,
-                        y: 0.5
+                        y: 0.0
                     },
                     show_bg: true,
                     draw_bg: {
@@ -200,8 +247,17 @@ live_design! {
                     }
 
                     <Label> {
-                        text: "OpenAI Realtime Audio Chat"
+                        text: "Realtime Audio Chat"
                         draw_text: {text_style: {font_size: 24}}
+                    }
+
+                    <TranscriptionModelSelector> {}
+                    voice_selector_wrapper = <VoiceSelector> {} // Disabling for now as it cannot be changed during conversation.
+                    selected_voice_view = <View> {
+                        visible: false
+                        height: Fit
+                        align: {x: 0.5, y: 0.5}
+                        selected_voice = <Label> { draw_text: {text_style: {font_size: 15}}}
                     }
 
                     <View> {
@@ -210,29 +266,19 @@ live_design! {
                         spacing: 20
     
                         button_connect = <Button> {
-                            text: "🔗 Connect to OpenAI"
-                            draw_text: {text_style: {font_size: 18}}
+                            text: "🔗 Connect and start conversation"
+                            draw_text: {text_style: {font_size: 15}}
                         }
 
                         connection_status = <Label> {
                             text: "Disconnected"
-                            draw_text: {text_style: {font_size: 16}}
+                            draw_text: {text_style: {font_size: 15}}
                         }
-                    }
-
-                    button_start_conversation = <Button> {
-                        text: "🎤 Start Conversation"
-                        draw_text: {text_style: {font_size: 18}}
-                    }
-
-                    button_stop_conversation = <Button> {
-                        text: "⏹️ Stop Conversation"
-                        draw_text: {text_style: {font_size: 18}}
                     }
 
                     toggle_interruptions = <Toggle> {
                         text: "Allow interruptions (requires headphones, no AEC yet)"
-                        draw_text: {text_style: {font_size: 14}}
+                        draw_text: {text_style: {font_size: 13}}
                         label_walk: {
                             margin: {left: 50}
                         }
@@ -244,13 +290,18 @@ live_design! {
                     transcript_label = <Label> {
                         width: Fill,
                         padding: {left: 30, right: 30}
-                        height: 200
-                        draw_text: {text_style: {font_size: 14}}
+                        height: 300
+                        draw_text: {text_style: {font_size: 15}}
                     }
 
                     status_label = <Label> {
                         text: "Ready to connect"
-                        draw_text: {text_style: {font_size: 16}}
+                        draw_text: {text_style: {font_size: 15}}
+                    }
+
+                    reset_button = <Button> {
+                        text: "🔄 Reset"
+                        draw_text: {text_style: {font_size: 15}}
                     }
                 }
             }
@@ -296,6 +347,8 @@ pub struct App {
     user_is_interrupting: bool,
     #[rust]
     current_assistant_item_id: Option<String>,
+    #[rust]
+    selected_voice: String,
 }
 
 impl LiveRegister for App {
@@ -317,26 +370,23 @@ impl MatchEvent for App {
             self.connect_to_openai(cx);
         }
 
-        if self
-            .ui
-            .button(id!(button_start_conversation))
-            .clicked(&actions)
-        {
-            self.start_conversation(cx);
-        }
 
         if self
             .ui
-            .button(id!(button_stop_conversation))
+            .button(id!(reset_button))
             .clicked(&actions)
         {
-            self.stop_conversation(cx);
+            self.reset_all(cx);
         }
 
         if let Some(enabled) = self.ui.check_box(id!(toggle_interruptions)).changed(&actions) {
             if enabled {
                 *self.is_recording.lock().unwrap() = true;
             }
+        }
+
+        if let Some(_value) = self.ui.drop_down(id!(transcription_model_selector)).changed(&actions) {
+            self.update_session_config(cx);
         }
     }
 
@@ -539,15 +589,6 @@ impl App {
         // Process messages
         for message in messages {
             match message {
-                WebSocketMessage::Opened => {
-                    log!("WebSocket connected to OpenAI");
-                    self.is_connected = true;
-                    self.ui
-                        .label(id!(connection_status))
-                        .set_text(cx, "✅ Connected to OpenAI");
-                    self.initialize_session(cx);
-                    self.update_ui_state(cx);
-                }
                 WebSocketMessage::String(data) => {
                     // log!("Received WebSocket message: {}", data);
                     self.handle_openai_message(cx, &data);
@@ -557,11 +598,6 @@ impl App {
                 }
                 WebSocketMessage::Error(error) => {
                     log!("WebSocket error: {}", error);
-                    self.ui
-                        .label(id!(connection_status))
-                        .set_text(cx, &format!("❌ Error: {}", error));
-                    self.is_connected = false;
-                    self.update_ui_state(cx);
                 }
                 WebSocketMessage::Closed => {
                     log!("WebSocket closed");
@@ -571,24 +607,31 @@ impl App {
                     self.is_connected = false;
                     self.conversation_active = false;
                     self.update_ui_state(cx);
-                }
+                },
+                _ => {}
             }
         }
     }
 
-    /// Initialize the OpenAI Realtime session with audio configuration
-    fn initialize_session(&mut self, _cx: &mut Cx) {
-        log!("Initializing OpenAI session");
+    /// Update the OpenAI Realtime session with audio configuration
+    fn update_session_config(&mut self, cx: &mut Cx) {
+        self.selected_voice = self.ui.drop_down(id!(voice_selector)).selected_label();
+        self.ui.view(id!(voice_selector_wrapper)).set_visible(cx, false);
+        self.ui.view(id!(selected_voice_view)).set_visible(cx, true);
+        self.ui.label(id!(selected_voice)).set_text(cx, format!("Selected voice: {}", self.selected_voice).as_str());
 
         let session_config = SessionConfig {
             modalities: vec!["text".to_string(), "audio".to_string()],
-            instructions: "You are a helpful AI assistant. Respond naturally and conversationally."
+            instructions: "You are a helpful AI assistant. Respond naturally and conversationally. Always respond in the same language as the user."
                 .to_string(),
-            voice: "alloy".to_string(),
+            voice: self.selected_voice.clone(),
             input_audio_format: "pcm16".to_string(),
             output_audio_format: "pcm16".to_string(),
             input_audio_transcription: Some(TranscriptionConfig {
-                model: "whisper-1".to_string(),
+                model: self.ui.drop_down(id!(transcription_model_selector)).selected_label()
+            }),
+            input_audio_noise_reduction: Some(NoiseReductionConfig {
+                noise_reduction_type: "far_field".to_string(), // TODO: do this programmatically based on microphone type
             }),
             turn_detection: Some(TurnDetectionConfig {
                 detection_type: "server_vad".to_string(), // Server-side VAD. Turns are detected by the server.
@@ -625,6 +668,7 @@ impl App {
                         self.ui
                             .label(id!(connection_status))
                             .set_text(cx, "✅ Connected to OpenAI");
+                        self.update_session_config(cx);
                         self.update_ui_state(cx);
                     }
                     OpenAIRealtimeResponse::SessionUpdated { .. } => {
@@ -632,6 +676,7 @@ impl App {
                         self.ui
                             .label(id!(status_label))
                             .set_text(cx, "✅ Session configured");
+                        self.start_conversation(cx);
                     }
                     OpenAIRealtimeResponse::ResponseAudioDelta { item_id, delta, .. } => {
                         if self.user_is_interrupting {
@@ -651,11 +696,9 @@ impl App {
                             if !interruptions_enabled {
                                 // Interruptions disabled - mute microphone during AI speech
                                 *self.is_recording.lock().unwrap() = false;
-                                println!("Setting is_recording to false (interruptions disabled)");
                             } else {
                                 // Interruptions enabled - ensure recording is active for real-time interruption
                                 *self.is_recording.lock().unwrap() = true;
-                                println!("Keeping is_recording true (interruptions enabled)");
                             }
                         }
 
@@ -700,13 +743,13 @@ impl App {
                             if interruptions_enabled {
                                 // Allow immediate interruption
                                 *self.is_recording.lock().unwrap() = true;
-                                status_label.set_text(cx, "✅ Response generated - 🎤 listening again");
+                                status_label.set_text(cx, "✅ Response generated - 🎤 listening...");
                             } else {
                                 // Without interruptions, only resume when playback buffer is truly empty
                                 if self.playback_audio.lock().unwrap().is_empty() {
                                     println!("Setting is_recording to true - response completed and playback empty");
                                     *self.is_recording.lock().unwrap() = true;
-                                    status_label.set_text(cx, "✅ Response generated - 🎤 listening again");
+                                    status_label.set_text(cx, "✅ Response generated - 🎤 listening...");
                                 } else {
                                     status_label.set_text(cx, "✅ Response generated - 🔊 playing audio");
                                     println!("Playback still active, keeping recording disabled");
@@ -803,6 +846,25 @@ impl App {
         }
     }
 
+    // Trigger a greeting response from the AI
+    fn create_greeting_response(&mut self) {
+        let message = OpenAIRealtimeMessage::ResponseCreate {
+            response: ResponseConfig {
+                modalities: vec!["text".to_string(), "audio".to_string()],
+                instructions: Some("You are a helpful AI assistant. Respond naturally and conversationally,
+                 start with a very short but enthusiastic and playful greeting in English, the greeting must not exceed 3 words".to_string()),
+                voice: Some(self.selected_voice.clone()),
+                output_audio_format: Some("pcm16".to_string()),
+                tools: None,
+                tool_choice: None,
+                temperature: Some(0.8),
+                max_output_tokens: Some(4096),
+            },
+        };
+
+        self.send_openai_message(message);
+    }
+
     fn start_conversation(&mut self, cx: &mut Cx) {
         if !self.is_connected {
             self.ui
@@ -824,13 +886,30 @@ impl App {
         *self.playback_position.lock().unwrap() = 0;
         self.current_transcript.clear();
 
-        self.ui
-            .label(id!(status_label))
-            .set_text(cx, "🎤 Listening...");
+        self.create_greeting_response();
+
         self.update_ui_state(cx);
 
         // Start streaming audio immediately
         self.start_audio_streaming(cx);
+    }
+
+    fn reset_all(&mut self, cx: &mut Cx) {
+        self.stop_conversation(cx);
+
+        self.is_connected = false;
+        self.has_sent_audio = false;
+        self.current_transcript.clear();
+        self.ui.label(id!(status_label)).set_text(cx, "Ready to connect");
+        self.ui.label(id!(transcript_label)).set_text(cx, "");
+
+        self.ui.view(id!(voice_selector_wrapper)).set_visible(cx, true);
+        self.ui.view(id!(selected_voice_view)).set_visible(cx, false);
+
+        self.update_ui_state(cx);
+
+        // Close the websocket connection
+        self.websocket.as_mut().unwrap().close();
     }
 
     fn stop_conversation(&mut self, cx: &mut Cx) {
@@ -845,17 +924,14 @@ impl App {
             self.audio_streaming_timer = None;
         }
 
-        // Send final audio chunk and commit if we have sent audio
-        self.send_audio_chunk_to_openai(cx);
-        if self.has_sent_audio {
-            let commit_message = OpenAIRealtimeMessage::InputAudioBufferCommit;
-            self.send_openai_message(commit_message);
+        // Cancel any pending audio playback
+        if let Ok(mut playback) = self.playback_audio.try_lock() {
+            playback.clear();
         }
 
         self.ui
             .label(id!(status_label))
             .set_text(cx, "⏹️ Conversation stopped");
-        self.update_ui_state(cx);
     }
 
     fn start_audio_streaming(&mut self, cx: &mut Cx) {
@@ -955,33 +1031,15 @@ impl App {
         if !self.is_connected {
             self.ui
                 .button(id!(button_connect))
-                .set_text(cx, "🔗 Connect to OpenAI");
-            self.ui
-                .button(id!(button_start_conversation))
-                .set_text(cx, "🎤 Start Conversation (Disconnected)");
-            self.ui
-                .button(id!(button_stop_conversation))
-                .set_text(cx, "⏹️ Stop Conversation");
+                .set_text(cx, "🔗 Connect and start conversation");
         } else if self.conversation_active {
             self.ui
                 .button(id!(button_connect))
                 .set_text(cx, "✅ Connected");
-            self.ui
-                .button(id!(button_start_conversation))
-                .set_text(cx, "🎤 Conversation Active");
-            self.ui
-                .button(id!(button_stop_conversation))
-                .set_text(cx, "⏹️ Stop Conversation");
         } else {
             self.ui
                 .button(id!(button_connect))
                 .set_text(cx, "✅ Connected");
-            self.ui
-                .button(id!(button_start_conversation))
-                .set_text(cx, "🎤 Start Conversation");
-            self.ui
-                .button(id!(button_stop_conversation))
-                .set_text(cx, "⏹️ Stop Conversation");
         }
     }
 }
